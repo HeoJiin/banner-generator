@@ -4,7 +4,9 @@ import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { BANNER_TYPES } from '@/types/banner';
 import { BannerStore } from '@/hooks/useBannerStore';
 import { downloadBannerAsPng } from '@/utils/download';
+import { getSavedUserName, saveUserName, sendDownloadLog } from '@/utils/adminLog';
 import { showToast } from './ui';
+import NameInputModal from './NameInputModal';
 import BannerPreviewCard from './BannerPreviewCard';
 
 interface BannerPreviewListProps {
@@ -15,6 +17,7 @@ export default function BannerPreviewList({ store }: BannerPreviewListProps) {
   const { state } = store;
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
   const [newInstanceId, setNewInstanceId] = useState<string | null>(null);
+  const [pendingDownload, setPendingDownload] = useState<{ instanceId: string; type: string } | null>(null);
   const cardRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
   // 복제 후 새 카드로 스크롤
@@ -26,8 +29,8 @@ export default function BannerPreviewList({ store }: BannerPreviewListProps) {
     }
   }, [newInstanceId]);
 
-  const handleIndividualDownload = useCallback(
-    async (instanceId: string, type: string) => {
+  const doIndividualDownload = useCallback(
+    async (instanceId: string, type: string, userName: string) => {
       const el = store.canvasRefs.current[instanceId];
       const config = BANNER_TYPES.find((t) => t.type === type);
       if (!el || !config) return;
@@ -36,6 +39,8 @@ export default function BannerPreviewList({ store }: BannerPreviewListProps) {
       try {
         await downloadBannerAsPng(el, instanceId, config.width, config.height);
         showToast({ text: `${config.label} 다운로드 완료`, type: 'info', duration: 1500 });
+        // fire-and-forget 로그 전송
+        sendDownloadLog(state, store.canvasRefs.current, userName, instanceId);
       } catch (error) {
         console.error('Download failed:', error);
         showToast({ text: '다운로드에 실패했습니다.', type: 'error' });
@@ -43,7 +48,30 @@ export default function BannerPreviewList({ store }: BannerPreviewListProps) {
         setDownloadingId(null);
       }
     },
-    [store.canvasRefs]
+    [store.canvasRefs, state]
+  );
+
+  const handleIndividualDownload = useCallback(
+    (instanceId: string, type: string) => {
+      const savedName = getSavedUserName();
+      if (savedName) {
+        doIndividualDownload(instanceId, type, savedName);
+      } else {
+        setPendingDownload({ instanceId, type });
+      }
+    },
+    [doIndividualDownload]
+  );
+
+  const handleNameConfirm = useCallback(
+    (name: string) => {
+      saveUserName(name);
+      if (pendingDownload) {
+        doIndividualDownload(pendingDownload.instanceId, pendingDownload.type, name);
+      }
+      setPendingDownload(null);
+    },
+    [pendingDownload, doIndividualDownload]
   );
 
   const handleDuplicate = useCallback((instanceId: string) => {
@@ -98,6 +126,12 @@ export default function BannerPreviewList({ store }: BannerPreviewListProps) {
           </div>
         );
       })}
+      {pendingDownload && (
+        <NameInputModal
+          onConfirm={handleNameConfirm}
+          onClose={() => setPendingDownload(null)}
+        />
+      )}
     </div>
   );
 }

@@ -4,8 +4,10 @@ import React, { useState, useEffect } from 'react';
 import { BannerMode } from '@/types/banner';
 import { downloadAllAsZip } from '@/utils/download';
 import { generateShareUrl, copyToClipboard } from '@/utils/shareUrl';
+import { getSavedUserName, saveUserName, sendDownloadLog } from '@/utils/adminLog';
 import { BannerStore } from '@/hooks/useBannerStore';
 import SaveLoadModal from './SaveLoadModal';
+import NameInputModal from './NameInputModal';
 import { showToast, Button, IconButton } from './ui';
 import SegmentControl from './ui/SegmentControl';
 
@@ -18,8 +20,9 @@ export default function TopBar({ store }: TopBarProps) {
   const [downloading, setDownloading] = useState(false);
   const [progress, setProgress] = useState({ done: 0, total: 4 });
   const [showSaveLoad, setShowSaveLoad] = useState(false);
+  const [showNameInput, setShowNameInput] = useState(false);
 
-  const handleDownloadAll = async () => {
+  const doDownload = async (userName: string) => {
     setDownloading(true);
     const enabledCount = state.instances.filter((i) => i.enabled).length;
     setProgress({ done: 0, total: enabledCount });
@@ -27,12 +30,29 @@ export default function TopBar({ store }: TopBarProps) {
       await downloadAllAsZip(canvasRefs.current, state.instances, (done, total) => {
         setProgress({ done, total });
       });
+      // fire-and-forget: 로그 전송
+      sendDownloadLog(state, canvasRefs.current, userName);
     } catch (error) {
       console.error('ZIP download failed:', error);
       showToast({ text: '다운로드에 실패했습니다. 다시 시도해주세요.', type: 'error' });
     } finally {
       setDownloading(false);
     }
+  };
+
+  const handleDownloadAll = () => {
+    const savedName = getSavedUserName();
+    if (savedName) {
+      doDownload(savedName);
+    } else {
+      setShowNameInput(true);
+    }
+  };
+
+  const handleNameConfirm = (name: string) => {
+    saveUserName(name);
+    setShowNameInput(false);
+    doDownload(name);
   };
 
   // 키보드 단축키: ⌘Z / Ctrl+Z (undo), ⌘⇧Z / Ctrl+⇧Z (redo)
@@ -139,6 +159,7 @@ export default function TopBar({ store }: TopBarProps) {
       </div>
 
       {showSaveLoad && <SaveLoadModal store={store} onClose={() => setShowSaveLoad(false)} />}
+      {showNameInput && <NameInputModal onConfirm={handleNameConfirm} onClose={() => setShowNameInput(false)} />}
     </header>
   );
 }
