@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import { PRESET_COLORS, PRESET_GRADIENTS, KEYWORDS, SEASON_ACCENTS, GradientPreset, BadgePosition, BgDecorationType, BgDecorationCategory, BG_DECO_CATEGORIES, isLightColor, buildGradientCss, SEASON_BLUR_ASSETS, THEME_MAIN_ASSETS, COMMON_ASSETS, pickRandomTheme, getBlurAssetsForKeywords, getMainAssetsForKeywords, getAllAssets, getAssetCategories, pickRandom } from '@/types/banner';
 import { BannerStore } from '@/hooks/useBannerStore';
+import { trackInteraction } from '@/utils/interactionTracker';
 import { Toggle, ColorPicker, SectionTitle, showToast, Chip, ChipGroup, Button, SegmentControl, TabBar, FormField, FormGroup, SectionBlock } from './ui';
 import { extractDarkestColor, extractImageBaseColor, extractPalette, getContrastTextColor } from '@/utils/colorExtract';
 import { hasHighlightSyntax } from '@/utils/highlightText';
@@ -880,6 +881,7 @@ function BlurBgToggle({ store }: { store: BannerStore }) {
   const { state, setBlurBgUrl } = store;
 
   const handleReroll = () => {
+    trackInteraction('reroll_background');
     const pool = getBlurAssetsForKeywords(state.selectedKeywords);
     const picked = pool[Math.floor(Math.random() * pool.length)] || null;
     setBlurBgUrl(picked);

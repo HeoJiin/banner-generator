@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useCallback, useRef, useEffect } from 'react';
+import { trackInteraction } from '@/utils/interactionTracker';
 import {
   BannerType,
   BannerMode,
@@ -183,6 +184,7 @@ export function useBannerStore() {
   }, []);
 
   const rerollHighlightColor = useCallback(() => {
+    trackInteraction('reroll_highlight');
     setState((prev) => {
       const bgColors = prev.backgroundType === 'gradient'
         ? [prev.backgroundGradientFrom, prev.backgroundGradientTo]
@@ -394,6 +396,7 @@ export function useBannerStore() {
 
   /* ── Reroll 소구점: 메인 에셋 + 배경 다시 뽑기 (키워드 기준) ── */
   const rerollTheme = useCallback(() => {
+    trackInteraction('reroll_theme');
     // 먼저 updates를 계산하고, 이미지 로드 완료 후 state 일괄 적용
     const kwId = state.selectedKeywords[0];
     if (!kwId) return;
@@ -405,6 +408,7 @@ export function useBannerStore() {
 
   /* ── Reroll 시즌: 배경만 다시 뽑기 (시즌 강조 기준) ── */
   const rerollSeasonAccent = useCallback(() => {
+    trackInteraction('reroll_season');
     const seasonId = state.seasonAccent;
     if (!seasonId) return;
     const updates: Partial<BannerState> = {};
@@ -535,6 +539,7 @@ export function useBannerStore() {
 
   /* ── Instance management ── */
   const duplicateInstance = useCallback((instanceId: string) => {
+    trackInteraction('duplicate');
     setState((prev) => {
       const srcIdx = prev.instances.findIndex((i) => i.id === instanceId);
       if (srcIdx < 0) return prev;
@@ -565,10 +570,11 @@ export function useBannerStore() {
 
   /* ── Settings panel toggle ── */
   const toggleSettingsPanel = useCallback((instanceId: string) => {
-    setState((prev) => ({
-      ...prev,
-      activeSettingsPanel: prev.activeSettingsPanel === instanceId ? null : instanceId,
-    }));
+    setState((prev) => {
+      const isOpening = prev.activeSettingsPanel !== instanceId;
+      if (isOpening) trackInteraction('detail_panel_open');
+      return { ...prev, activeSettingsPanel: isOpening ? instanceId : null };
+    });
   }, []);
 
   const closeSettingsPanel = useCallback(() => {

@@ -1,7 +1,8 @@
 import { toPng } from 'html-to-image';
 import { BannerState, BANNER_TYPES, BannerInstance } from '@/types/banner';
+import { getInteractionStats, resetInteractionStats } from './interactionTracker';
 
-const ADMIN_API = process.env.NEXT_PUBLIC_ADMIN_API_URL || 'http://localhost:3100';
+const ADMIN_API = process.env.NEXT_PUBLIC_ADMIN_API_URL;
 const USER_NAME_KEY = 'banner-admin-user-name';
 
 export function getSavedUserName(): string | null {
@@ -10,6 +11,15 @@ export function getSavedUserName(): string | null {
 
 export function saveUserName(name: string): void {
   try { localStorage.setItem(USER_NAME_KEY, name); } catch { /* noop */ }
+}
+
+function dataUrlToBlob(dataUrl: string): Blob {
+  const [header, base64] = dataUrl.split(',');
+  const mime = header.match(/:(.*?);/)?.[1] || 'image/png';
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return new Blob([bytes], { type: mime });
 }
 
 /**
@@ -24,6 +34,8 @@ export async function sendDownloadLog(
   userName: string,
   targetInstanceId?: string,
 ): Promise<void> {
+  if (!ADMIN_API) return; // 환경변수 미설정 시 로깅 스킵
+
   try {
     const targets = targetInstanceId
       ? state.instances.filter((i) => i.id === targetInstanceId)
@@ -42,12 +54,30 @@ export async function sendDownloadLog(
     formData.append('instances_count', String(targets.length));
     formData.append('banner_types', JSON.stringify(Array.from(new Set(targets.map((i) => i.type)))));
 
-    // state snapshot (이미지 데이터 제외)
-    const snapshot = { ...state, activeSettingsPanel: null };
-    if (snapshot.imageSettings) {
-      snapshot.imageSettings = { ...snapshot.imageSettings, imageDataUrl: null };
+    // state snapshot — 대형 DataURL 필드 제거
+    const snapshot: Record<string, unknown> = {
+      ...state,
+      activeSettingsPanel: null,
+      // base64 DataURL 필드 제거
+      mainGraphicUrl: typeof state.mainGraphicUrl === 'string' && state.mainGraphicUrl.startsWith('data:') ? null : state.mainGraphicUrl,
+      mainGraphicUrl2: null,
+      blurBgUrl: null,
+      bgDecorationUrl: null,
+    };
+    if (state.imageSettings) {
+      snapshot.imageSettings = { ...state.imageSettings, imageDataUrl: null, graphicAssetUrl: null };
     }
     formData.append('state_snapshot', JSON.stringify(snapshot));
+
+    // 인터랙션 통계
+    formData.append('interaction_stats', JSON.stringify(getInteractionStats()));
+
+    // 세부 설정 분석
+    const detailStats = analyzeDetailSettings(state, targets);
+    formData.append('detail_settings', JSON.stringify(detailStats));
+
+    // 전송 후 카운터 리셋
+    resetInteractionStats();
 
     // 썸네일 캡처 (축소 버전)
     for (const inst of targets) {
@@ -64,8 +94,7 @@ export async function sendDownloadLog(
           style: { transform: 'none' },
         });
 
-        const res = await fetch(dataUrl);
-        const blob = await res.blob();
+        const blob = dataUrlToBlob(dataUrl);
         const fieldName = `thumbnail_${inst.type}_${inst.id}`;
         formData.append(fieldName, blob, `${inst.id}.png`);
         formData.append(`label_${fieldName}`, inst.label);
@@ -82,6 +111,43 @@ export async function sendDownloadLog(
     });
   } catch {
     // fire-and-forget — 로깅 실패는 무시
-    console.warn('[AdminLog] Failed to send download log');
   }
+}
+
+/** 세부 설정 사용 현황 분석 */
+function analyzeDetailSettings(state: BannerState, targets: BannerInstance[]) {
+  const result: Record<string, unknown> = {
+    has_title_override: false,
+    has_subtitle_override: false,
+    has_bg_color_override: false,
+    has_graphic_override: false,
+    sub_text_positions: [] as string[],
+    object_placements: [] as string[],
+    cta_text: null as string | null,
+    cta_color: null as string | null,
+    notice_enabled: false,
+    notice_text: null as string | null,
+    duplicated_count: targets.filter((i) => !i.isOriginal).length,
+  };
+
+  for (const inst of targets) {
+    const s = inst.settings as unknown as Record<string, unknown>;
+    if (s.titleOverride) result.has_title_override = true;
+    if (s.subtitleOverride) result.has_subtitle_override = true;
+    if (s.backgroundColorOverride) result.has_bg_color_override = true;
+    if (s.mainGraphicOverride) result.has_graphic_override = true;
+    if (s.subTextPosition) (result.sub_text_positions as string[]).push(s.subTextPosition as string);
+    if (s.objectPlacement) (result.object_placements as string[]).push(s.objectPlacement as string);
+    // Popup-specific
+    if (inst.type === 'popup') {
+      if (s.ctaText) result.cta_text = s.ctaText as string;
+      if (s.ctaColor) result.cta_color = s.ctaColor as string;
+      if (s.noticeEnabled) {
+        result.notice_enabled = true;
+        result.notice_text = (s.notice as string) || null;
+      }
+    }
+  }
+
+  return result;
 }
