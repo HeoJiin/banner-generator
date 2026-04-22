@@ -98,6 +98,20 @@ export const BM_VARIANTS: BmVariant[] = [
   { id: 2, label: '텍스트 중앙', textAlign: 'center', subTextCount: 2, objectPlacement: 'none', pagination: false },
 ];
 
+/* ───────────────────────── Graphic Adjust (그래픽 모드 미세 조정) ───────────────────────── */
+
+export interface GraphicAdjust {
+  scale: number;    // 0.85 ~ 1.0, default 1.0
+  offsetX: number;  // -20 ~ +20, default 0
+  offsetY: number;  // -20 ~ +20, default 0
+}
+
+export const DEFAULT_GRAPHIC_ADJUST: GraphicAdjust = {
+  scale: 1.0,
+  offsetX: 0,
+  offsetY: 0,
+};
+
 /* ───────────────────────── Per-Banner Settings ───────────────────────── */
 
 /** 이미지형 전용 배너별 조절값 */
@@ -166,6 +180,7 @@ export interface PopupBannerSettings {
   subtitleOverride: string | null;
   mainGraphicOverride: string | null;
   imageOverride: ImageOverride;
+  graphicAdjust: GraphicAdjust;
 }
 
 export interface ContentBannerSettings {
@@ -178,6 +193,7 @@ export interface ContentBannerSettings {
   subtitleOverride: string | null;
   mainGraphicOverride: string | null;
   imageOverride: ImageOverride;
+  graphicAdjust: GraphicAdjust;
 }
 
 /* ───────────────────────── Image Mode Settings ───────────────────────── */
@@ -288,12 +304,14 @@ const DEFAULT_POPUP: PopupBannerSettings = {
   notice: '이벤트 내용은 변경될 수 있습니다', backgroundColorOverride: null,
   hideBadge: false, titleOverride: null, subtitleOverride: null, mainGraphicOverride: null,
   imageOverride: { ...DEFAULT_IMAGE_OVERRIDE },
+  graphicAdjust: { ...DEFAULT_GRAPHIC_ADJUST },
 };
 const DEFAULT_CONTENT: ContentBannerSettings = {
   subTextPosition: 'top', subtitleTop: '', subtitleBottom: '',
   backgroundColorOverride: null, hideBadge: false,
   titleOverride: null, subtitleOverride: null, mainGraphicOverride: null,
   imageOverride: { ...DEFAULT_IMAGE_OVERRIDE },
+  graphicAdjust: { ...DEFAULT_GRAPHIC_ADJUST },
 };
 
 export const DEFAULT_STATE: BannerState = {

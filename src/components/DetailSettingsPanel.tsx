@@ -16,6 +16,8 @@ import {
   ImageOverride,
   CommonBannerSettings,
   DEFAULT_IMAGE_OVERRIDE,
+  GraphicAdjust,
+  DEFAULT_GRAPHIC_ADJUST,
   getMainAssetsForKeywords,
   getAllAssets,
   getAssetCategories,
@@ -163,6 +165,90 @@ function ImageAreaControls({ store, bannerType }: { store: BannerStore; bannerTy
           style={{ '--range-progress': `${((override.offsetY + 200) / 400) * 100}%` } as React.CSSProperties}
         />
         <div className="flex justify-between text-caption text-content-tertiary"><span>-200</span><span>+200</span></div>
+      </div>
+    </div>
+  );
+}
+
+/* ── 그래픽 미세 조정 훅 (그래픽 모드, 팝업/콘텐츠 전용) ── */
+function useGraphicAdjust(store: BannerStore, bannerType: 'popup' | 'content') {
+  const { state } = store;
+  const inst = state.instances.find((i) => i.id === state.activeSettingsPanel);
+  const settings = inst?.settings as (PopupBannerSettings | ContentBannerSettings) | undefined;
+  const adjust: GraphicAdjust = settings?.graphicAdjust ?? DEFAULT_GRAPHIC_ADJUST;
+
+  const update = (patch: Partial<GraphicAdjust>) => {
+    const next = { ...adjust, ...patch };
+    const p = { graphicAdjust: next };
+    if (bannerType === 'popup') store.updatePopup(p);
+    else store.updateContent(p);
+  };
+
+  const reset = () => update({ ...DEFAULT_GRAPHIC_ADJUST });
+
+  const isChanged =
+    adjust.scale !== DEFAULT_GRAPHIC_ADJUST.scale ||
+    adjust.offsetX !== DEFAULT_GRAPHIC_ADJUST.offsetX ||
+    adjust.offsetY !== DEFAULT_GRAPHIC_ADJUST.offsetY;
+
+  return { adjust, update, reset, isChanged };
+}
+
+/* ── 그래픽 미세 조정 리셋 버튼 ── */
+function GraphicAdjustResetButton({ store, bannerType }: { store: BannerStore; bannerType: 'popup' | 'content' }) {
+  const { isChanged, reset } = useGraphicAdjust(store, bannerType);
+  if (!isChanged) return null;
+  return <Button variant="ghost" size="md" onClick={reset}>초기화</Button>;
+}
+
+/* ── 그래픽 미세 조정 슬라이더 (그래픽 모드, 팝업/콘텐츠 전용) ── */
+function GraphicAdjustControls({ store, bannerType }: { store: BannerStore; bannerType: 'popup' | 'content' }) {
+  const { adjust, update } = useGraphicAdjust(store, bannerType);
+  const hasGraphic = !!store.state.mainGraphicUrl;
+  const yRange = bannerType === 'content' ? 80 : 20;
+
+  const snap = (value: number, defaultValue: number, threshold: number) =>
+    Math.abs(value - defaultValue) <= threshold ? defaultValue : value;
+
+  return (
+    <div className={`flex flex-col gap-3 ${!hasGraphic ? 'opacity-50 pointer-events-none' : ''}`}>
+      <div>
+        <MiniLabel>크기: {Math.round(adjust.scale * 100)}%</MiniLabel>
+        <input
+          type="range" min={85} max={100} step={1}
+          aria-label="그래픽 크기"
+          value={Math.round(adjust.scale * 100)}
+          onChange={(e) => update({ scale: snap(Number(e.target.value), 100, 2) / 100 })}
+          className="w-full"
+          style={{ '--range-progress': `${((adjust.scale * 100) - 85) / (100 - 85) * 100}%` } as React.CSSProperties}
+        />
+        <div className="flex justify-between text-caption text-content-tertiary"><span>85%</span><span>100%</span></div>
+      </div>
+
+      <div>
+        <MiniLabel>좌우 이동: {adjust.offsetX}px</MiniLabel>
+        <input
+          type="range" min={-20} max={20} step={1}
+          aria-label="좌우 이동"
+          value={adjust.offsetX}
+          onChange={(e) => update({ offsetX: snap(Number(e.target.value), 0, 2) })}
+          className="w-full"
+          style={{ '--range-progress': `${((adjust.offsetX + 20) / 40) * 100}%` } as React.CSSProperties}
+        />
+        <div className="flex justify-between text-caption text-content-tertiary"><span>-20</span><span>+20</span></div>
+      </div>
+
+      <div>
+        <MiniLabel>{bannerType === 'content' ? '하단 이동' : '상하 이동'}: {adjust.offsetY}px</MiniLabel>
+        <input
+          type="range" min={bannerType === 'content' ? 0 : -yRange} max={yRange} step={1}
+          aria-label={bannerType === 'content' ? '하단 이동' : '상하 이동'}
+          value={adjust.offsetY}
+          onChange={(e) => update({ offsetY: snap(Number(e.target.value), 0, 2) })}
+          className="w-full"
+          style={{ '--range-progress': `${bannerType === 'content' ? (adjust.offsetY / yRange) * 100 : ((adjust.offsetY + yRange) / (yRange * 2)) * 100}%` } as React.CSSProperties}
+        />
+        <div className="flex justify-between text-caption text-content-tertiary"><span>{bannerType === 'content' ? '0' : `-${yRange}`}</span><span>+{yRange}</span></div>
       </div>
     </div>
   );
@@ -539,6 +625,11 @@ function PopupDetailSettings({ store }: { store: BannerStore }) {
       <SectionBlock title="그래픽">
         <MainGraphicSelector store={store} currentOverride={s.mainGraphicOverride} onChange={(url) => updatePopup({ mainGraphicOverride: url })} />
       </SectionBlock>
+      {state.mode === 'graphic' && (
+        <SectionBlock title="그래픽 미세 조정" action={<GraphicAdjustResetButton store={store} bannerType="popup" />}>
+          <GraphicAdjustControls store={store} bannerType="popup" />
+        </SectionBlock>
+      )}
       <SectionBlock title="CTA">
         <FormField label="CTA 텍스트" value={s.ctaText} onChange={(v) => updatePopup({ ctaText: v })} />
         <div>
@@ -584,6 +675,11 @@ function ContentDetailSettings({ store }: { store: BannerStore }) {
       <SectionBlock title="그래픽">
         <MainGraphicSelector store={store} currentOverride={s.mainGraphicOverride} onChange={(url) => updateContent({ mainGraphicOverride: url })} />
       </SectionBlock>
+      {state.mode === 'graphic' && (
+        <SectionBlock title="그래픽 미세 조정" action={<GraphicAdjustResetButton store={store} bannerType="content" />}>
+          <GraphicAdjustControls store={store} bannerType="content" />
+        </SectionBlock>
+      )}
       {state.mode === 'image' && (
         <SectionBlock title="이미지 조절" action={<ImageAreaResetButton store={store} bannerType="content" />}>
           <ImageAreaControls store={store} bannerType="content" />

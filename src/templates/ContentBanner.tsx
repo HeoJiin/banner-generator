@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { BannerState } from '@/types/banner';
+import { BannerState, DEFAULT_GRAPHIC_ADJUST, ContentBannerSettings } from '@/types/banner';
 import { ImageOverlay } from './ImageOverlay';
 import { getBackground } from './backgroundHelper';
 import { BadgeBanner } from './BadgeBanner';
@@ -69,11 +69,14 @@ export default function ContentBanner({ state }: ContentBannerProps) {
       </div>
 
       {/* Right graphic: main + sub — 피그마 기준 left:calc(50%+235), top:calc(50%+35) */}
-      {mode === 'graphic' && mainGraphicUrl && (
-        <div style={{ position: 'absolute', left: 'calc(50% + 225px)', top: 'calc(50% + 35px)', transform: 'translate(-50%, -50%)', width: 500, height: 500, zIndex: 2, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <img src={mainGraphicUrl} alt="" style={{ maxHeight: '100%', maxWidth: '100%', objectFit: 'contain' }} />
-        </div>
-      )}
+      {mode === 'graphic' && mainGraphicUrl && (() => {
+        const ga = (content as ContentBannerSettings).graphicAdjust ?? DEFAULT_GRAPHIC_ADJUST;
+        return (
+          <div style={{ position: 'absolute', left: 'calc(50% + 225px)', top: 'calc(50% + 35px)', transform: `translate(-50%, -50%) translate(${ga.offsetX}px, ${ga.offsetY}px) scale(${ga.scale})`, width: 500, height: 500, zIndex: 2, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <img src={mainGraphicUrl} alt="" style={{ maxHeight: '100%', maxWidth: '100%', objectFit: 'contain' }} />
+          </div>
+        );
+      })()}
     </div>
   );
 }

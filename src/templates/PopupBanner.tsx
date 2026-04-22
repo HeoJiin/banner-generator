@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { BannerState } from '@/types/banner';
+import { BannerState, DEFAULT_GRAPHIC_ADJUST, PopupBannerSettings } from '@/types/banner';
 import { ImageOverlay } from './ImageOverlay';
 import { getBackground } from './backgroundHelper';
 import { BadgeBanner } from './BadgeBanner';
@@ -78,11 +78,14 @@ export default function PopupBanner({ state }: PopupBannerProps) {
       </div>
 
       {/* Graphic: main + sub composed */}
-      {mode === 'graphic' && mainGraphicUrl && (
-        <div style={{ position: 'absolute', top: `calc(50% + ${30 + textOffset}px)`, left: '50%', transform: 'translate(-50%, -50%)', width: 320, height: 320, zIndex: 2, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <img src={mainGraphicUrl} alt="" style={{ maxHeight: '100%', maxWidth: '100%', objectFit: 'contain' }} />
-        </div>
-      )}
+      {mode === 'graphic' && mainGraphicUrl && (() => {
+        const ga = (popup as PopupBannerSettings).graphicAdjust ?? DEFAULT_GRAPHIC_ADJUST;
+        return (
+          <div style={{ position: 'absolute', top: `calc(50% + ${30 + textOffset}px)`, left: '50%', transform: `translate(-50%, -50%) translate(${ga.offsetX}px, ${ga.offsetY}px) scale(${ga.scale})`, width: 320, height: 320, zIndex: 2, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <img src={mainGraphicUrl} alt="" style={{ maxHeight: '100%', maxWidth: '100%', objectFit: 'contain' }} />
+          </div>
+        );
+      })()}
 
       {/* CTA — z-index 10 */}
       <div style={{ position: 'absolute', bottom: 24, left: 0, right: 0, zIndex: 10, textAlign: 'center' }}>
