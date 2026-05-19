@@ -1,0 +1,2 @@
+- [배포 서비스 매핑](reference_railway_services.md) — Vercel 이전 완료, 관리자 API 미복구
+- [Vercel 이전 상태](project_vercel_migration.md) — Railway 만료 → Vercel 완료, admin API 재배포 필요
