@@ -34,15 +34,18 @@ export async function sendDownloadLog(
   userName: string,
   targetInstanceId?: string,
 ): Promise<void> {
-  if (!ADMIN_API) return; // 환경변수 미설정 시 로깅 스킵
+  if (!ADMIN_API) {
+    console.debug('[AdminLog] ADMIN_API not set, skipping');
+    return;
+  }
+
+  const targets = targetInstanceId
+    ? state.instances.filter((i) => i.id === targetInstanceId)
+    : state.instances.filter((i) => i.enabled);
+
+  const formData = new FormData();
 
   try {
-    const targets = targetInstanceId
-      ? state.instances.filter((i) => i.id === targetInstanceId)
-      : state.instances.filter((i) => i.enabled);
-
-    const formData = new FormData();
-
     // 메타 정보
     formData.append('user_name', userName);
     formData.append('title', state.title);
@@ -55,19 +58,22 @@ export async function sendDownloadLog(
     formData.append('banner_types', JSON.stringify(Array.from(new Set(targets.map((i) => i.type)))));
 
     // state snapshot — 대형 DataURL 필드 제거
-    const snapshot: Record<string, unknown> = {
-      ...state,
-      activeSettingsPanel: null,
-      // base64 DataURL 필드 제거
-      mainGraphicUrl: typeof state.mainGraphicUrl === 'string' && state.mainGraphicUrl.startsWith('data:') ? null : state.mainGraphicUrl,
-      mainGraphicUrl2: null,
-      blurBgUrl: null,
-      bgDecorationUrl: null,
-    };
-    if (state.imageSettings) {
-      snapshot.imageSettings = { ...state.imageSettings, imageDataUrl: null, graphicAssetUrl: null };
+    try {
+      const snapshot: Record<string, unknown> = {
+        ...state,
+        activeSettingsPanel: null,
+        mainGraphicUrl: typeof state.mainGraphicUrl === 'string' && state.mainGraphicUrl.startsWith('data:') ? null : state.mainGraphicUrl,
+        mainGraphicUrl2: null,
+        blurBgUrl: null,
+        bgDecorationUrl: null,
+      };
+      if (state.imageSettings) {
+        snapshot.imageSettings = { ...state.imageSettings, imageDataUrl: null, graphicAssetUrl: null };
+      }
+      formData.append('state_snapshot', JSON.stringify(snapshot));
+    } catch {
+      formData.append('state_snapshot', '{}');
     }
-    formData.append('state_snapshot', JSON.stringify(snapshot));
 
     // 인터랙션 통계
     formData.append('interaction_stats', JSON.stringify(getInteractionStats()));
@@ -78,39 +84,46 @@ export async function sendDownloadLog(
 
     // 전송 후 카운터 리셋
     resetInteractionStats();
+  } catch (e) {
+    console.warn('[AdminLog] Failed to build metadata:', e);
+  }
 
-    // 썸네일 캡처 (축소 버전)
-    for (const inst of targets) {
-      const el = canvasRefs[inst.id];
-      const config = BANNER_TYPES.find((t) => t.type === inst.type);
-      if (!el || !config) continue;
+  // 썸네일 캡처 — 실패해도 메타 로그는 전송
+  for (const inst of targets) {
+    const el = canvasRefs[inst.id];
+    const config = BANNER_TYPES.find((t) => t.type === inst.type);
+    if (!el || !config) continue;
 
-      try {
-        const dataUrl = await toPng(el, {
-          width: config.width,
-          height: config.height,
-          pixelRatio: 0.5,
-          cacheBust: true,
-          style: { transform: 'none' },
-        });
+    try {
+      const dataUrl = await toPng(el, {
+        width: config.width,
+        height: config.height,
+        pixelRatio: 0.5,
+        cacheBust: true,
+        style: { transform: 'none' },
+      });
 
-        const blob = dataUrlToBlob(dataUrl);
-        const fieldName = `thumbnail_${inst.type}_${inst.id}`;
-        formData.append(fieldName, blob, `${inst.id}.png`);
-        formData.append(`label_${fieldName}`, inst.label);
-        formData.append(`width_${fieldName}`, String(config.width));
-        formData.append(`height_${fieldName}`, String(config.height));
-      } catch {
-        // 개별 썸네일 캡처 실패 시 스킵
-      }
+      const blob = dataUrlToBlob(dataUrl);
+      const fieldName = `thumbnail_${inst.type}_${inst.id}`;
+      formData.append(fieldName, blob, `${inst.id}.png`);
+      formData.append(`label_${fieldName}`, inst.label);
+      formData.append(`width_${fieldName}`, String(config.width));
+      formData.append(`height_${fieldName}`, String(config.height));
+    } catch {
+      // 개별 썸네일 캡처 실패 시 스킵
     }
+  }
 
+  // 로그 전송 — 썸네일 유무와 관계없이 반드시 실행
+  try {
+    console.debug('[AdminLog] Sending log to', ADMIN_API);
     await fetch(`${ADMIN_API}/api/logs`, {
       method: 'POST',
       body: formData,
     });
-  } catch {
-    // fire-and-forget — 로깅 실패는 무시
+    console.debug('[AdminLog] Log sent successfully');
+  } catch (e) {
+    console.warn('[AdminLog] Failed to send log:', e);
   }
 }
 

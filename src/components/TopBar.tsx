@@ -42,7 +42,7 @@ export default function TopBar({ store }: TopBarProps) {
 
   const handleDownloadAll = () => {
     const savedName = getSavedUserName();
-    if (savedName) {
+    if (savedName && savedName !== '익명') {
       doDownload(savedName);
     } else {
       setShowNameInput(true);

@@ -54,7 +54,7 @@ export default function BannerPreviewList({ store }: BannerPreviewListProps) {
   const handleIndividualDownload = useCallback(
     (instanceId: string, type: string) => {
       const savedName = getSavedUserName();
-      if (savedName) {
+      if (savedName && savedName !== '익명') {
         doIndividualDownload(instanceId, type, savedName);
       } else {
         setPendingDownload({ instanceId, type });
